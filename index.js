@@ -356,3 +356,79 @@ document.getElementById('toggleMode').addEventListener('click', function() {
         this.classList.remove('night-mode');
     }
 });
+
+// PDF Receipt Generator
+const { jsPDF } = window.jspdf;
+
+function generatePDF() {
+    const doc = new jsPDF();
+
+    // Add a custom font for the header (optional)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text('Bill Splitter Receipt', 105, 20, null, null, 'center'); // Centered title
+
+    // Add the date
+    const date = new Date().toLocaleDateString();
+    doc.setFontSize(12);
+    doc.text(`Date: ${date}`, 20, 30);
+
+    // Divider line after the header
+    doc.setLineWidth(0.5);
+    doc.line(20, 35, 190, 35);
+
+    // Table header for each person
+    let yOffset = 45; // Initial y offset for the table
+
+    Object.keys(personTotals).forEach(person => {
+        if (Array.isArray(personTotals[person]) && personTotals[person].length > 0) {
+            // Person name as a header for each section
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(16);
+            doc.text(`${person}'s Receipt`, 20, yOffset);
+            yOffset += 10;
+
+            // Table header (Food name, price, original price)
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(12);
+            doc.text('Food Item', 30, yOffset);
+            doc.text('Original Price', 110, yOffset);
+            doc.text('Split Price (With Tax)', 160, yOffset);
+            yOffset += 6;
+
+            // Table line
+            doc.line(20, yOffset, 190, yOffset);
+            yOffset += 6;
+
+            // Loop over each food item for this person
+            personTotals[person].forEach(foodItem => {
+                doc.text(`${foodItem.foodName}`, 30, yOffset);  // Food name
+                doc.text(`$${foodItem.originalPrice.toFixed(2)}`, 110, yOffset); // Original price
+                doc.text(`$${foodItem.price.toFixed(2)}`, 160, yOffset); // Split price
+                yOffset += 8; // Spacing between items
+            });
+
+            // Person's total
+            yOffset += 4; // Extra spacing before total
+            doc.setFont("helvetica", "bold");
+            doc.text(`Total for ${person}: $${personTotals[person].total.toFixed(2)}`, 160, yOffset, { align: "right" });
+            yOffset += 10;
+        }
+    });
+
+    // Calculate and display the total bill
+    let totalBillAmount = Object.values(personTotals).reduce((acc, person) => acc + (person.total || 0), 0);
+    doc.setFontSize(16);
+    doc.text(`Total Bill: $${totalBillAmount.toFixed(2)}`, 130, yOffset);
+
+    // Add footer with page number (optional)
+    doc.setFontSize(10);
+    doc.text(`Page 1 of 1`, 105, 290, null, null, 'center');
+
+    // Save the PDF
+    doc.save('bill-splitter-receipt.pdf');
+}
+
+// Add a button to trigger PDF generation
+const pdfButton = document.getElementById('pdfButton');
+pdfButton.addEventListener('click', generatePDF);
