@@ -393,7 +393,7 @@ function generatePDF() {
     Object.keys(personTotals).forEach(person => {
         if (Array.isArray(personTotals[person]) && personTotals[person].length > 0) {
             // Check if adding this section will overflow the page
-            if (yOffset + 30 > pageHeight) {
+            if (yOffset + 30 > pageHeight - margin) {
                 addNewPage();
             }
 
@@ -417,7 +417,7 @@ function generatePDF() {
 
             // Loop over each food item for this person
             personTotals[person].forEach(foodItem => {
-                if (yOffset + 10 > pageHeight) {
+                if (yOffset + 10 > pageHeight - margin) {
                     addNewPage();
                 }
                 doc.text(`${foodItem.foodName}`, margin + 10, yOffset);  // Food name
@@ -428,7 +428,7 @@ function generatePDF() {
 
             // Person's total
             yOffset += 4; // Extra spacing before total
-            if (yOffset + 10 > pageHeight) {
+            if (yOffset + 10 > pageHeight - margin) {
                 addNewPage();
             }
             doc.setFont("helvetica", "bold");
@@ -438,12 +438,13 @@ function generatePDF() {
     });
 
     // Calculate and display the total bill
-    if (yOffset + 20 > pageHeight) {
+    if (yOffset + 20 > pageHeight - margin) {
         addNewPage();
     }
     let totalBillAmount = Object.values(personTotals).reduce((acc, person) => acc + (person.total || 0), 0);
     doc.setFontSize(16);
     doc.text(`Total Bill: $${totalBillAmount.toFixed(2)}`, pageWidth - margin - 40, yOffset);
+    yOffset += 20;  // Adjust to add spacing at the end
 
     // Add footer with page number (optional)
     const pageCount = doc.internal.getNumberOfPages();
