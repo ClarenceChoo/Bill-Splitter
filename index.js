@@ -1,4 +1,4 @@
-// Event listener for the initial form submission
+// Existing variables
 const initialForm = document.getElementById('initialForm');
 const initialFormContainer = document.getElementById('initialFormContainer');
 const nameFormContainer = document.getElementById('nameFormContainer');
@@ -9,12 +9,222 @@ const taxFormContainer = document.getElementById('taxFormContainer');
 const finalResultContainer = document.getElementById('finalResultContainer');
 const finalResult = document.getElementById('finalResult');
 
+let personTotals = {}; // { personName: [{foodName: 'Pizza', price: 10}, ...], ... }
+let personTotalsStack = []; // Stack to store states of personTotals
+let formIndex = 1; // Keep track of the current food form
+let foodForms = [];
+let names = []; // To store names globally for recalculation
 
+// Function to clear all food forms
+const clearFoodForms = () => {
+    foodForms.forEach(form => {
+        form.style.display = 'none';
+    });
+    foodForms = [];
+    foodForm.innerHTML = ''; // Remove all child elements
+};
+
+// Function to handle full recalculation of personTotals
+const recalculatePersonTotals = () => {
+    // Reset personTotals
+    personTotals = {};
+
+    // Initialize personTotals for each person
+    names.forEach(name => {
+        personTotals[name] = [];
+    });
+
+    // Iterate through all food forms and process them
+    foodForms.forEach((form, idx) => {
+        const currentFormIndex = idx + 1; // Assuming formIndex starts at 1
+        const foodPriceInput = document.getElementById(`foodPrice${currentFormIndex}`);
+        const foodNameInput = document.getElementById(`foodName${currentFormIndex}`);
+        const nameButtons = document.querySelectorAll(`#foodForm${currentFormIndex} .nameButton`);
+
+        const selectedPeople = Array.from(nameButtons)
+            .filter(button => button.classList.contains('selected'))
+            .map(button => button.dataset.name);
+
+        const foodPrice = parseFloat(foodPriceInput.value);
+        const foodName = foodNameInput.value.trim();
+
+        // Validate input before processing
+        if (selectedPeople.length > 0 && !isNaN(foodPrice) && foodName !== '') {
+            const splitPrice = foodPrice / selectedPeople.length;
+
+            selectedPeople.forEach(person => {
+                if (!Array.isArray(personTotals[person])) {
+                    personTotals[person] = [];
+                }
+                personTotals[person].push({
+                    foodName: foodName,
+                    price: splitPrice,
+                    originalPrice: foodPrice
+                });
+
+                // Update the total for this person
+                if (!personTotals[person].total) {
+                    personTotals[person].total = 0;
+                }
+                personTotals[person].total += splitPrice;
+            });
+        }
+    });
+};
+
+// Function to create a new food form
+const createFoodForm = (index) => {
+    let foodFormHTML = `
+        <div id="foodForm${index}">
+            <label for="foodName${index}">Food Name:</label>
+            <input type="text" id="foodName${index}" name="foodName${index}" required><br>
+            <label for="foodPrice${index}">Price:</label>
+            <input type="number" id="foodPrice${index}" name="foodPrice${index}" step="0.01" min="0" required><br>
+
+            <div id="errorMessage${index}" class="errorMessage" style="display: none; color: red;">Please fill in both the food name and price.</div>
+
+            <div id="buttonContainer${index}" class="buttonContainer">`;
+
+    // Add buttons for each person to select who ate the food
+    names.forEach(name => {
+        foodFormHTML += `<button type="button" class="nameButton" data-name="${name}">${name}</button>`;
+    });
+
+    foodFormHTML += `</div>
+            <div id="errorMessagePerson${index}" class="errorMessagePerson" style="display: none; color: red;">Please select at least one person.</div>
+            <br>
+            <button type="button" id="nextButton${index}" class="next commonButton">Next</button>
+            <button type="button" id="backButton${index}" class="back commonButton">Back</button>
+            <br>
+            <button type="button" id="calculateTotalButton${index}" class="calculateTotal commonButton">Calculate Total</button>
+        </div>`;
+
+    return foodFormHTML;
+};
+
+// Function to show the food form based on the current form index
+const showFoodForm = (index) => {
+    // Hide all forms first
+    foodForms.forEach(form => form.style.display = 'none');
+    // Show the form corresponding to the index
+    const currentForm = document.getElementById(`foodForm${index}`);
+    if (currentForm) {
+        currentForm.style.display = 'block';
+    }
+};
+
+// Function to add event listeners to a specific food form
+const addFormListeners = (index) => {
+    const currentForm = document.getElementById(`foodForm${index}`);
+    if (!currentForm) return;
+
+    const validateInput = () => {
+        const foodNameInput = document.getElementById(`foodName${index}`);
+        const foodPriceInput = document.getElementById(`foodPrice${index}`);
+        const errorMessage = document.getElementById(`errorMessage${index}`);
+        const errorMessagePerson = document.getElementById(`errorMessagePerson${index}`);
+
+        const nameButtons = document.querySelectorAll(`#foodForm${index} .nameButton`);
+
+        const isPersonSelected = Array.from(nameButtons).some(button => button.classList.contains('selected'));
+
+        // Validate that both inputs are filled
+        if (foodNameInput.value.trim() === '' || foodPriceInput.value.trim() === '') {
+            errorMessage.style.display = "block";
+            errorMessagePerson.style.display = "none";
+            return false; // Validation failed
+        } else {
+            errorMessage.style.display = "none";
+            if (!isPersonSelected) {
+                errorMessagePerson.style.display = "block";
+                return false; // Validation failed
+            } else {
+                errorMessagePerson.style.display = "none";
+            }
+        }
+        return true; // Validation passed
+    };
+
+    // Event delegation for name buttons
+    const buttonContainer = document.getElementById(`buttonContainer${index}`);
+    buttonContainer.addEventListener('click', function(event) {
+        if (event.target && event.target.matches('button.nameButton')) {
+            event.target.classList.toggle('selected'); // Toggle selection
+        }
+    });
+
+    // Next button event listener
+    const nextButton = document.getElementById(`nextButton${index}`);
+    nextButton.addEventListener('click', function() {
+        if (validateInput()) {
+            // Recalculate all person totals
+            recalculatePersonTotals();
+
+            // Push the current state of personTotals onto the stack
+            personTotalsStack.push(JSON.parse(JSON.stringify(personTotals)));
+
+            // Move to the next form
+            formIndex++; // Increment form index
+            if (!document.getElementById(`foodForm${formIndex}`)) {
+                const newFormHTML = createFoodForm(formIndex);
+                foodForm.insertAdjacentHTML('beforeend', newFormHTML);
+                const newForm = document.getElementById(`foodForm${formIndex}`);
+                foodForms.push(newForm);
+                addFormListeners(formIndex); // Add listeners to the new form
+            }
+            showFoodForm(formIndex); // Show the next form
+        }
+    });
+
+    // Back button event listener
+    const backButton = document.getElementById(`backButton${index}`);
+    backButton.addEventListener('click', function() {
+        if (formIndex > 1) {
+            formIndex--; // Decrement form index
+
+            // Restore the previous state of personTotals from the stack
+            if (personTotalsStack.length > 0) {
+                personTotals = personTotalsStack.pop();
+            }
+
+            showFoodForm(formIndex); // Show the previous form
+        } else {
+            // Navigate back to the Name Form
+            foodAndNameSelect.style.display = 'none';
+            nameFormContainer.style.display = 'block';
+
+            // Reset state variables
+            personTotals = {};
+            personTotalsStack = [];
+
+            // Clear existing food forms
+            clearFoodForms();
+        }
+    });
+
+    // Calculate Total button event listener
+    const calculateTotalButton = document.getElementById(`calculateTotalButton${index}`);
+    calculateTotalButton.addEventListener('click', function() {
+        if (validateInput()) {
+            // Recalculate all person totals
+            recalculatePersonTotals();
+
+            // Push the current state of personTotals onto the stack
+            personTotalsStack.push(JSON.parse(JSON.stringify(personTotals)));
+
+            // Show the tax form and hide the food form
+            taxFormContainer.style.display = 'block';
+            foodAndNameSelect.style.display = 'none';
+        }
+    });
+};
+
+// Event listener for the initial form submission
 initialForm.addEventListener('submit', function(event) {
     event.preventDefault(); // Prevent default form submission
 
     const peopleCount = document.getElementById('peopleCount').value; // Get number of people
-    
+
     // Populate name form with input fields
     let nameFormHtml = '';
     for (let i = 1; i <= peopleCount; i++) {
@@ -39,229 +249,49 @@ initialForm.addEventListener('submit', function(event) {
     });
 });
 
-// Initialize personTotals for each person to 0
-let personTotals = {}; // { personName: [{foodName: 'Pizza', price: 10}, ...], ... }
-let personTotalsStack = []; // Stack to store states of personTotals
-let processedForms = {}; // Object to track if a form has been processed
-
-// Function to handle adding the split amount for each person
-const processFoodForm = (index) => {
-
-    // Prevent processing the same form multiple times
-    if (processedForms[index]) return;
-
-    // Get the food price and selected people for the current form
-    const foodPriceInput = document.getElementById(`foodPrice${index}`);
-    const foodNameInput = document.getElementById(`foodName${index}`);
-    const nameButtons = document.querySelectorAll(`#foodForm${index} .nameButton`);
-
-    const selectedPeople = Array.from(nameButtons)
-        .filter(button => button.classList.contains('selected'))
-        .map(button => button.dataset.name);
-
-    const foodPrice = parseFloat(foodPriceInput.value);
-    const foodName = foodNameInput.value.trim();
-
-    // Validate input before processing
-    if (selectedPeople.length > 0 && !isNaN(foodPrice)) {
-        const splitPrice = foodPrice / selectedPeople.length;
-
-        // Add the split price and name to each selected person's total
-        selectedPeople.forEach(person => {
-            if (!Array.isArray(personTotals[person])) {
-                personTotals[person] = []; // Initialize as an empty array if not already an array
-            }
-            personTotals[person].push({
-                foodName: foodName,
-                price: splitPrice,
-                originalPrice: foodPrice
-            });
-        });
-
-        // Mark this form as processed to prevent reprocessing
-        processedForms[index] = true;
-    }
-};
-
-let formIndex = 1; // Keep track of the current food form
-let foodForms = [];
-
-// Function to show the food form based on the current form index
-const showFoodForm = (index) => {
-    // Hide all forms first
-    foodForms.forEach(form => form.style.display = 'none');
-    // Show the form corresponding to the index
-    document.getElementById(`foodForm${index}`).style.display = 'block';
-};
-
-// Add event listener for name form submission on page load
+// Add event listener for name form submission
 nameForm.addEventListener('submit', function(event) {
     event.preventDefault(); // Prevent default submission
 
     const peopleCount = document.getElementById('peopleCount').value; // Get number of people
-    let names = [];
-    
+    names = []; // Reset names array
+
     for (let i = 1; i <= peopleCount; i++) {
-        let name = document.getElementById(`name${i}`).value; // Get name from input with id="name{i}"
+        let name = document.getElementById(`name${i}`).value.trim(); // Get name from input with id="name{i}"
+        if (name === '') {
+            alert(`Name ${i} cannot be empty.`);
+            return;
+        }
         names.push(name); // Store each name in an array
     }
 
     nameFormContainer.style.display = "none"; // Hide the name form
     foodAndNameSelect.style.display = "block"; // Show the food selection form
 
-    // Initialize personTotals for each person to 0
+    // Initialize personTotals for each person to an empty array
     personTotals = {};
     names.forEach(name => {
-        personTotals[name] = 0;
+        personTotals[name] = [];
     });
 
-    // Function to create a new food form
-    const createFoodForm = (index) => {
-        let foodFormHTML = `
-            <div id="foodForm${index}">
-                <label for="foodName${index}">Food Name:</label>
-                <input type="text" id="foodName${index}" name="foodName${index}" required><br>
-                <label for="foodPrice${index}">Price:</label>
-                <input type="number" id="foodPrice${index}" name="foodPrice${index}" step="0.01" required><br>
+    // Reset stacks and food forms
+    personTotalsStack = [];
+    clearFoodForms();
 
-                <div id="errorMessage${index}" class="errorMessage" style="display: none; color: red;">Please fill in both the food name and price.</div>
+    // Reset formIndex
+    formIndex = 1;
 
-                <div id="buttonContainer${index}" class="buttonContainer">`;
-
-        // Add buttons for each person to select who ate the food
-        names.forEach(name => {
-            foodFormHTML += `<button type="button" class="nameButton" data-name="${name}">${name}</button>`;
-        });
-
-        foodFormHTML += `</div>
-                <div id="errorMessagePerson${index}" class="errorMessagePerson" style="display: none; color: red;">Please select a person.</div>
-                <br>
-                <button type="button" id="nextButton${index}" class="next commonButton">Next</button>
-                <button type="button" id="backButton${index}" class="back commonButton">Back</button>
-                <br>
-                <button type="button" id="calculateTotalButton${index}" class="calculateTotal commonButton">Calculate Total</button>
-            </div>`;
-
-        return foodFormHTML;
-    };
-
-    // Create the initial form and push it into the array
+    // Create the initial food form and push it into the array
     foodForm.innerHTML = createFoodForm(formIndex);
-    foodForms.push(document.getElementById(`foodForm${formIndex}`));
+    const firstForm = document.getElementById(`foodForm${formIndex}`);
+    foodForms.push(firstForm);
 
-    // Add event listeners for name selection buttons and navigation
-    const addFormListeners = (index) => {
-
-        const validateInput = () => {
-            // Get the food name and price input fields for the current form
-            const foodNameInput = document.getElementById(`foodName${index}`);
-            const foodPriceInput = document.getElementById(`foodPrice${index}`);
-            const errorMessage = document.getElementById(`errorMessage${index}`);
-            const errorMessagePerson = document.getElementById(`errorMessagePerson${index}`);
-
-            // Define nameButtons inside the click event
-            const nameButtons = document.querySelectorAll(`#foodForm${index} .nameButton`);
-
-            // Check if at least one name button has the "selected" class
-            const isPersonSelected = Array.from(nameButtons).some(button => button.classList.contains('selected'));
-
-            // Validate that both inputs are filled
-            if (foodNameInput.value.trim() === '' || foodPriceInput.value.trim() === '') {
-                // If either input is empty, show an error message 
-                errorMessage.style.display = "block";
-                return; // Stop the execution here if validation fails
-            }
-            else {
-                errorMessage.style.display="none";
-                if (!isPersonSelected) { // Check if a person is selected
-                    errorMessagePerson.style.display = "block";
-                    return; // Stop the execution here if validation fails
-                }
-                else {
-                    errorMessagePerson.style.display = "none";
-                }
-            }
-            return true; //Validation process
-        }
-
-        // Event listener for "Calculate Total" button
-        document.getElementById(`calculateTotalButton${index}`).addEventListener('click', function () {
-            //Validate Input
-            if (validateInput(index)) {
-                // Process the current form before calculating totals
-                processFoodForm(index);
-            } else {
-                return;
-            }
-
-            // Push the current state of personTotals onto the stack
-            personTotalsStack.push(JSON.parse(JSON.stringify(personTotals)));
-
-            // Show the final amounts for each person
-            taxFormContainer.style.display = 'block'; // Show the tax form
-            foodAndNameSelect.style.display = 'none'; // Hide the food form
-        });
-
-        document.querySelectorAll(`#foodForm${index} .nameButton`).forEach(button => {
-            button.addEventListener('click', function() {
-                this.classList.toggle('selected'); // Toggle selection for people who ate the food
-            });
-        });
-
-        
-        // Next button event listener
-        document.getElementById(`nextButton${index}`).addEventListener('click', function() {
-
-            //Validate Input
-            if (validateInput(index)) {
-                // Process the current form before moving to the next form
-                processFoodForm(index);
-            } else {
-                return;
-            }
-
-            // Push the current state of personTotals onto the stack
-            personTotalsStack.push(JSON.parse(JSON.stringify(personTotals)));
-
-            formIndex++; // Increment form index
-            if (!document.getElementById(`foodForm${formIndex}`)) { // What happens when clicked the next button
-                const newFormHTML = createFoodForm(formIndex); // Create new form
-                foodForm.insertAdjacentHTML('beforeend', newFormHTML);
-                foodForms.push(document.getElementById(`foodForm${formIndex}`)); // Track the new form
-                addFormListeners(formIndex); // Add event listeners for the new form
-            }
-            showFoodForm(formIndex); // Show the next form    
-        });
-
-        // Back button event listener
-        document.getElementById(`backButton${index}`).addEventListener('click', function() {
-            if (formIndex > 1) {
-                formIndex--; // Decrement form index
-
-                // Restore the previous state of personTotals and remove the last processed form flag
-                if (personTotalsStack.length > 0) {
-                    personTotals = personTotalsStack.pop();
-                }
-                delete processedForms[formIndex + 1]; // Reset the flag for the next form
-
-                showFoodForm(formIndex); // Show the previous form
-            } else {
-                // Optionally, handle going back to the names form if formIndex == 1
-                foodAndNameSelect.style.display = 'none';
-                nameFormContainer.style.display = 'block';
-            }
-        });
-    };
-
-    // Add listeners to the first form
+    // Add event listeners for the first form
     addFormListeners(formIndex);
-    showFoodForm(formIndex); // Display the first food form initially and hide the rest
-
+    showFoodForm(formIndex); // Display the first food form
 });
 
-let taxTotalsStack = []; // Stack to store states of personTotals before tax
-
-// Event listener for tax form submission
+// Tax Form Submission Event Listener
 document.getElementById('taxForm').addEventListener('submit', function(event) {
     event.preventDefault(); // Prevent default form submission
 
@@ -269,7 +299,7 @@ document.getElementById('taxForm').addEventListener('submit', function(event) {
     if (!isNaN(taxRate)) {
 
         // Save the current state before applying tax
-        taxTotalsStack.push(JSON.parse(JSON.stringify(personTotals)));
+        personTotalsStack.push(JSON.parse(JSON.stringify(personTotals)));
 
         let totalBillAmount = 0; // Variable to store the total amount for the entire bill
 
@@ -322,11 +352,10 @@ document.getElementById('backButtonTax').addEventListener('click', function () {
     taxFormContainer.style.display = 'none'; 
     foodAndNameSelect.style.display = 'block'; 
 
-    // Restore the previous state of personTotals and remove the last processed form flag
+    // Restore the previous state of personTotals from the stack
     if (personTotalsStack.length > 0) {
         personTotals = personTotalsStack.pop();
     }
-    delete processedForms[formIndex + 1]; // Reset the flag for the next form
 
     showFoodForm(formIndex); 
 });
@@ -335,8 +364,8 @@ document.getElementById('backButtonTax').addEventListener('click', function () {
 document.getElementById('backButtonResult').addEventListener('click', function () {
 
     // Restore the previous state of personTotals before tax was applied
-    if (taxTotalsStack.length > 0) {
-        personTotals = taxTotalsStack.pop();
+    if (personTotalsStack.length > 0) {
+        personTotals = personTotalsStack.pop();
     }
 
     taxFormContainer.style.display = 'block';
@@ -438,10 +467,10 @@ function generatePDF() {
     });
 
     // Calculate and display the total bill
+    let totalBillAmount = Object.values(personTotals).reduce((acc, person) => acc + (person.total || 0), 0);
     if (yOffset + 20 > pageHeight - margin) {
         addNewPage();
     }
-    let totalBillAmount = Object.values(personTotals).reduce((acc, person) => acc + (person.total || 0), 0);
     doc.setFontSize(16);
     doc.text(`Total Bill: $${totalBillAmount.toFixed(2)}`, pageWidth - margin - 40, yOffset);
     yOffset += 20;  // Adjust to add spacing at the end
